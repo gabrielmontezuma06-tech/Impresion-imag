@@ -1,0 +1,56 @@
+name: Construir APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar los archivos del repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Preparar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Crear el proyecto Android
+        run: |
+          mkdir -p www
+          cp index.html manifest.webmanifest icon-192.png icon-512.png www/
+          npm init -y
+          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/filesystem@7 @capacitor/share@7
+          npx cap init "Imprime a Medida" com.imprimeamedida.app --web-dir www
+          npx cap add android
+          npx cap sync android
+
+      - name: Poner el ícono de la app
+        continue-on-error: true
+        run: |
+          RES=android/app/src/main/res
+          for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            dir=${d%%:*}; px=${d##*:}
+            convert icon-512.png -resize ${px}x${px} $RES/mipmap-$dir/ic_launcher.png
+            convert icon-512.png -resize ${px}x${px} $RES/mipmap-$dir/ic_launcher_round.png
+            convert icon-512.png -resize ${px}x${px} $RES/mipmap-$dir/ic_launcher_foreground.png
+          done
+          rm -rf $RES/mipmap-anydpi-v26
+
+      - name: Construir el APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Guardar el APK para descargar
+        uses: actions/upload-artifact@v4
+        with:
+          name: imprime-a-medida-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
